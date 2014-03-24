@@ -22,8 +22,8 @@ class RedUNIT_Base_Aliasing extends RedUNIT_Base
 		$person->alias('teacher')->ownProject[] = $pro;
 		$person->alias('student')->ownCourse[] = $c;
 		R::store($person);
-		asrt($c->fresh()->student->name, 'x');
-		asrt($pro->fresh()->teacher->name, 'x');
+		asrt($c->fresh()->fetchAs('person')->student->name, 'x');
+		asrt($pro->fresh()->fetchAs('person')->teacher->name, 'x');
 	}
 
 	/**
