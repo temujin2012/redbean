@@ -477,7 +477,8 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 				$insertvalues[]  = $pair['value'];
 			}
 
-			return $this->insertRecord( $table, $insertcolumns, array( $insertvalues ) );
+			//Otherwise psql returns string while MySQL/SQLite return numeric causing problems with additions (array_diff)
+			return (string) $this->insertRecord( $table, $insertcolumns, array( $insertvalues ) );
 		}
 
 		if ( $id && !count( $updatevalues ) ) {
