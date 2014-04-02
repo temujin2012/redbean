@@ -76,7 +76,6 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 		$account = R::load( 'user', $id );
 		asrt( count( $account->alias( 'seller' )->ownTransaction ), 10 );
 	
-		
 		$account->alias( 'seller' )->ownTransaction = array();
 		
 		$id = R::store( $account );

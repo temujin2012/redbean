@@ -355,13 +355,14 @@ class RedBean_OODB extends RedBean_Observable
 	 */
 	private function processTrashcan( $bean, $ownTrashcan )
 	{
-		$myFieldLink = $bean->getMeta( 'type' ) . '_id';
+
 		foreach ( $ownTrashcan as $trash ) {
-			if ( isset( $this->dep[$trash->getMeta( 'type' )] ) && in_array( $bean->getMeta( 'type' ), $this->dep[$trash->getMeta( 'type' )] ) ) {
 			
+			$myFieldLink = $bean->getMeta( 'type' ) . '_id';
 			$alias = $bean->getMeta( 'sys.alias.' . $trash->getMeta( 'type' ) );
 			if ( $alias ) $myFieldLink = $alias . '_id';
 			
+			if ( isset( $this->dep[$trash->getMeta( 'type' )] ) && in_array( $bean->getMeta( 'type' ), $this->dep[$trash->getMeta( 'type' )] ) ) {
 				$this->trash( $trash );
 			} else {
 				$trash->$myFieldLink = NULL;
@@ -444,7 +445,6 @@ class RedBean_OODB extends RedBean_Observable
 				$myFieldLink = $beanType . '_id';
 				$alias = $bean->getMeta( 'sys.alias.' . $addition->getMeta( 'type' ) );
 				if ( $alias ) $myFieldLink = $alias . '_id';
-				echo $alias;	
 				$addition->$myFieldLink = $bean->id;
 				$addition->setMeta( 'cast.' . $myFieldLink, 'id' );
 				$this->store( $addition );

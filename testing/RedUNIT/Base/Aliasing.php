@@ -13,8 +13,12 @@
  */
 class RedUNIT_Base_Aliasing extends RedUNIT_Base
 {
-
-	public function _atest() {
+	/**
+	 * Test for aliasing issue for LTS version.
+	 * 
+	 * @return void
+	 */
+	public function testIssueAliasingForLTSVersion() {
 		$person = R::dispense('person');
 		$pro = R::dispense('project');
 		$c = R::dispense('course');
@@ -24,6 +28,12 @@ class RedUNIT_Base_Aliasing extends RedUNIT_Base
 		R::store($person);
 		asrt($c->fresh()->fetchAs('person')->student->name, 'x');
 		asrt($pro->fresh()->fetchAs('person')->teacher->name, 'x');
+		$person = $person->fresh();
+		$person->alias('teacher')->ownProject = array();
+		$person->alias('student')->ownCourse = array();
+		R::store($person);
+		asrt($c->fresh()->fetchAs('person')->student, NULL);
+		asrt($pro->fresh()->fetchAs('person')->teacher, NULL);
 	}
 
 	/**
