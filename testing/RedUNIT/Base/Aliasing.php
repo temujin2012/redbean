@@ -14,6 +14,18 @@
 class RedUNIT_Base_Aliasing extends RedUNIT_Base
 {
 
+	public function _atest() {
+		$person = R::dispense('person');
+		$pro = R::dispense('project');
+		$c = R::dispense('course');
+		$person->name = 'x';
+		$person->alias('teacher')->ownProject[] = $pro;
+		$person->alias('student')->ownCourse[] = $c;
+		R::store($person);
+		asrt($c->fresh()->student->name, 'x');
+		asrt($pro->fresh()->teacher->name, 'x');
+	}
+
 	/**
 	 * Describing how clearing state of bean works.
 	 * Every method returning somthing (except getID)
