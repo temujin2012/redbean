@@ -13,10 +13,142 @@
  */
 class RedUNIT_Base_Relations extends RedUNIT_Base
 {
+	public function testViaCacheIssue378() {
+		R::nuke();
+		$mediaBean = R::dispense('media');
+		$fooPerson = R::dispense('person');
+		$mediaBean->sharedPerson[] = $fooPerson;
+		R::store($mediaBean);
+		asrt( count( $mediaBean->sharedPerson ), 1 );
+
+		$person = R::findOne('person');
+		$person->via('relation')->sharedMarriage[] = R::dispense('marriage');
+		//this second one caused the via property to not get cleared
+		$person->via('relation')->sharedMarriage;
+
+		asrt( count( $person->sharedMedia ), 1 );
+
+		//also found this scenario, non-existing property
+		$book = R::dispense('book');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->nothing;
+		asrt( count( $book->sharedPage ), 1 );
+
+		//yet another
+		$book = R::dispense('magazine');
+		$book->ownAdList[] = R::dispense('ad');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->ownAd;
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('folder');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->sharedItem[] = R::dispense('item');
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('folder2');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->sharedItem[] = R::dispense('item');
+		$book->via('garbage')->sharedItem[] = R::dispense('item');
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('folder3');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->item = R::dispense('item');
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('folder3');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->item = 'test';
+		asrt( count( $book->sharedPage ), 1 );
+
+		//yet another
+		$book = R::dispense('leaflet');
+		$book->title = 'leaflet';
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->title;
+		asrt( count( $book->sharedPage ), 1 );
+
+		//yet another
+		$book = R::dispense('paper');
+		$book->author = R::dispense('author');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->author;
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('paper2');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('garbage')->author;
+		asrt( count( $book->sharedPage ), 1 );
+
+		//yet another one
+		$book = R::dispense('archive');
+		$book->sharedItem[] = R::dispense('item');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		unset( $book->via('garbage')->sharedItem );
+		asrt( count( $book->sharedPage ), 1 );
+
+		//theoretic cases
+		$book = R::dispense('guide');
+		$book->sharedItem[] = R::dispense('item');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('relation')->countShared('item');
+		$book->via('relation')->countShared('item');
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('catalogue');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('relation')->countShared('item');
+		$book->via('relation')->countShared('item');
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('tabloid');
+		$book->ownItem[] = R::dispense('item');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('relation')->countOwn('item');
+		$book->via('relation')->countOwn('item');
+		asrt( count( $book->sharedPage ), 1 );
+
+		$book = R::dispense('booklet');
+		$book->ownItem[] = R::dispense('item');
+		$book->sharedPage[] = R::dispense('page');
+		R::store($book);
+		$book = $book->fresh();
+		$book->via('relation')->countOwn('item');
+		$book->via('relation')->countOwn('item');
+		asrt( count( $book->sharedPage ), 1 );
+		RedBean_QueryWriter_AQueryWriter::clearRenames();
+	}
 
 	/**
 	 * Test Relations and conditions.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testRelationsAndConditions()
@@ -70,13 +202,13 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test filtering relations on links (using columns in the link table).
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testSharedLinkCond()
 	{
 		testpack( 'Test new shared relations with link conditions' );
-		
+
 		$w = R::$writer;
 
 		list( $b1, $b2 ) = R::dispense( 'book', 2 );
@@ -217,7 +349,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 	{
 
 		testpack('test relatedCount()');
-		
+
 		list( $d, $d2 ) = R::dispense( 'document', 2 );
 
 		list( $p, $p2, $p3 ) = R::dispense( 'page', 3 );
@@ -250,10 +382,10 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 		R::store( $author );
 	}
-	
+
 	/**
 	 * Test related count using via().
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testRelatedCountVia()
@@ -274,7 +406,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test counting and aliasing.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testCountingAndAliasing()
@@ -333,7 +465,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test via.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testVia()
@@ -355,7 +487,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test creation of link table.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testCreationOfLinkTable()
@@ -372,7 +504,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Fast track link block code should not affect self-referential N-M relations.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testFastTrackRelations()
@@ -467,7 +599,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test list beautifications.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testListBeautifications()
@@ -509,7 +641,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test list add and delete.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testListAddDelete()
@@ -569,7 +701,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 	/**
 	 * Test basic and complex common usage scenarios for
 	 * relations and associations.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testScenarios()
@@ -1278,7 +1410,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * Test parent bean relations.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testParentBean()
@@ -1309,7 +1441,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * test N-M relations through intermediate beans
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testNMRelationsIntermediate()
@@ -1364,7 +1496,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * test emulation of sharedList through intermediate beans
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testSharedListIntermediate()
@@ -1401,7 +1533,7 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 
 	/**
 	 * test emulation via association renaming
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testAssociationRenaming()
@@ -1482,24 +1614,24 @@ class RedUNIT_Base_Relations extends RedUNIT_Base
 		asrt( $exhibition->from, '2014-07-03' );
 		asrt( $exhibition->til, '2014-10-02' );
 	}
-	
+
 	/**
 	 * Test don't try to store other things in shared list.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testDontTryToStoreOtherThingsInSharedList() {
 
 		$book = R::dispense( 'book' );
 		$book->sharedPage[] = 'nonsense';
-		
+
 		try {
 			R::store( $book );
 			fail();
 		} catch( RedBean_Exception_Security $exception) {
 			pass();
 		}
-		
+
 	}
-	
+
 }

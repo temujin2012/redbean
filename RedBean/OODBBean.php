@@ -33,7 +33,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 
 	/**
 	 * Whether to skip beautification of columns or not.
-	 * 
+	 *
 	 * @var boolean
 	 */
 	private $flagSkipBeau = FALSE;
@@ -86,7 +86,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 	 * @var string
 	 */
 	private $via = NULL;
-	
+
 	/**
 	 * @var boolean
 	 */
@@ -137,6 +137,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 
 		$this->withSql    = '';
 		$this->withParams = array();
+		$this->via = NULL;
 
 		return $beans;
 	}
@@ -268,9 +269,9 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 	 * an array with the properties container as its contents.
 	 * This method is meant for PHP and allows you to access beans as if
 	 * they were arrays, i.e. using array notation:
-	 * 
+	 *
 	 * $bean[ $key ] = $value;
-	 * 
+	 *
 	 * Note that not all PHP functions work with the array interface.
 	 *
 	 * @return ArrayIterator
@@ -646,7 +647,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 	 * Clears state.
 	 * Internal method. Clears the state of the query modifiers of the bean.
 	 * Query modifiers are: with(), withCondition(), alias() and fetchAs().
-	 * 
+	 *
 	 * @return void
 	 */
 	private function clear() {
@@ -654,6 +655,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 		$this->withParams = array();
 		$this->aliasName  = NULL;
 		$this->fetchType  = NULL;
+		$this->via        = NULL;
 	}
 
 	/**
@@ -926,7 +928,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 	/**
 	 * Implementation of __toString Method
 	 * Routes call to Model. If the model implements a __toString() method this
-	 * method will be called and the result will be returned. In case of an 
+	 * method will be called and the result will be returned. In case of an
 	 * echo-statement this result will be printed. If the model does not
 	 * implement a __toString method, this method will return a JSON
 	 * representation of the current bean.
@@ -1340,6 +1342,7 @@ class RedBean_OODBBean implements IteratorAggregate, ArrayAccess, Countable
 
 		}
 
+		$this->via        = NULL;
 		$this->withSql    = '';
 		$this->withParams = array();
 

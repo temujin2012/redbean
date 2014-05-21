@@ -835,6 +835,14 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 	}
 
 	/**
+	 * Clears all renames.
+	 */
+	public static function clearRenames()
+	{
+		self::$renames = array();
+	}
+
+	/**
 	 * @see RedBean_QueryWriter::getAssocTable
 	 */
 	public function getAssocTable( $types )
