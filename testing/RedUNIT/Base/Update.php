@@ -14,6 +14,64 @@
 class RedUNIT_Base_Update extends RedUNIT_Base
 {
 	/**
+	 * Test whether we can use SQL filters and
+	 * whether they are being applied properly for
+	 * different types of SELECT queries in the QueryWriter.
+	 */
+	public function testSQLFilters()
+	{
+		R::nuke();
+		RedBean_QueryWriter_AQueryWriter::setSQLFilters(array(
+			RedBean_QueryWriter::C_SQLFILTER_READ => array(
+				'book' => array( 'title' => ' LOWER(book.title) '),
+			),
+			RedBean_QueryWriter::C_SQLFILTER_WRITE => array(
+				'book' => array( 'title' => ' UPPER(?) '),
+			),
+		));
+
+		$book = R::dispense( 'book' );
+		$book->title = 'story';
+		R::store( $book );
+		asrt( R::getCell( 'SELECT title FROM book WHERE id = ?', array( $book->id ) ), 'STORY' );
+		$book = $book->fresh();
+		asrt( $book->title, 'story' );
+		$library = R::dispense( 'library' );
+		$library->sharedBook[] = $book;
+		R::store( $library );
+		$library = $library->fresh();
+		$books = $library->sharedBook;
+		$book = reset( $books );
+		asrt( $book->title, 'story' );
+		$otherBook = R::dispense('book');
+		$otherBook->sharedBook[] = $book;
+		R::store( $otherBook );
+		$otherBook = $otherBook->fresh();
+		$books = $otherBook->sharedBook;
+		$book = reset( $books );
+		asrt( $book->title, 'story' );
+		$links = $book->ownBookBook;
+		$link = reset( $links );
+		$link->shelf = 'x13';
+		RedBean_QueryWriter_AQueryWriter::setSQLFilters(array(
+			RedBean_QueryWriter::C_SQLFILTER_READ => array(
+				'book' => array( 'title' => ' LOWER(book.title) '),
+				'book_book' => array( 'shelf' => ' LOWER(book_book.shelf) '),
+			),
+			RedBean_QueryWriter::C_SQLFILTER_WRITE => array(
+				'book' => array( 'title' => ' UPPER(?) '),
+				'book_book' => array( 'shelf' => ' UPPER(?) ')
+			),
+		));
+		R::store( $link );
+		asrt( R::getCell( 'SELECT shelf FROM book_book WHERE id = ?', array( $link->id ) ), 'X13' );
+		$otherBook = $otherBook->fresh();
+		unset($book->sharedBook[$otherBook->id]);
+		R::store( $book );
+		RedBean_QueryWriter_AQueryWriter::setSQLFilters(array());
+	}
+
+	/**
 	 * Tests whether we can update or unset a parent bean
 	 * with an alias without having to use fetchAs and
 	 * without loading the aliased bean causing table-not-found
@@ -26,7 +84,7 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 
 		$trans  = R::dispense( 'transaction' );
 		$seller = R::dispense( 'user' );
-		
+
 		$trans->seller = $seller;
 
 		$id = R::store( $trans );
@@ -42,9 +100,9 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 		} catch( Exception $e ) {
 			fail();
 		}
-	
+
 		$trans = R::load( 'transaction', $id );
-		
+
 		//same for unset...
 		try {
 			unset( $trans->seller );
@@ -63,26 +121,26 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 		$account->alias( 'boo' ); //try to trick me...
 
 		$id = R::store( $account );
-		
+
 		R::freeze( true );
-		
+
 		$account = R::load( 'user', $id );
 		asrt( count( $account->alias( 'seller' )->ownTransaction ), 10 );
-		
+
 		//you cannot unset a list
 		unset( $account->alias( 'seller' )->ownTransaction );
 		$id = R::store( $account );
-		
+
 		$account = R::load( 'user', $id );
 		asrt( count( $account->alias( 'seller' )->ownTransaction ), 10 );
-	
+
 		$account->alias( 'seller' )->ownTransaction = array();
-		
+
 		$id = R::store( $account );
 		$account = R::load( 'user', $id );
 		asrt(count($account->alias( 'seller' )->ownTransaction), 0 );
 		asrt(count($account->ownTransaction), 0 );
-		
+
 		R::freeze( false );
 
 		//but also make sure we don't cause extra column issue #335
@@ -91,7 +149,7 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 
 		$building = R::dispense('building');
 		$village  = R::dispense('village');
-		
+
 		$building->village = $village;
 
 		R::store($building);
@@ -100,13 +158,13 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 		$building->village = NULL;
 
 		R::store($building);
-		
+
 		$building = $building->fresh();
 
 		$columns = R::inspect('building');
 		asrt( isset( $columns['village'] ), false );
 		asrt( isset( $building->village ), false );
-		
+
 		R::nuke();
 
 		$building = R::dispense('building');
@@ -115,7 +173,7 @@ class RedUNIT_Base_Update extends RedUNIT_Base
                 $building->village = $village;
 
                 R::store($building);
-        
+
                 $building = $building->fresh();
                 unset($building->village);
 
@@ -133,7 +191,7 @@ class RedUNIT_Base_Update extends RedUNIT_Base
                 $building->village = $village;
 
                 R::store($building);
-        
+
                 $building = $building->fresh();
                 $building->village = false;
 
@@ -146,12 +204,12 @@ class RedUNIT_Base_Update extends RedUNIT_Base
                 asrt( isset( $building->village ), false );
 
 	}
-	
+
 	/**
 	 * All kinds of tests for basic CRUD.
-	 * 
+	 *
 	 * Does the data survive?
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testUpdatingBeans()
@@ -168,7 +226,7 @@ class RedUNIT_Base_Update extends RedUNIT_Base
 		} else {
 			R::$writer->widenColumn( 'bean', 'id', R::$writer->scanType( 'abc' ) );
 		}
-			
+
 		$bean->id = 'abc';
 
 		R::store( $bean );

@@ -18,6 +18,10 @@
  */
 class RedBean_OODB extends RedBean_Observable
 {
+	/**
+	 * @var array
+	 */
+	private static $sqlFilters = array();
 
 	/**
 	 * @var array
@@ -357,11 +361,11 @@ class RedBean_OODB extends RedBean_Observable
 	{
 
 		foreach ( $ownTrashcan as $trash ) {
-			
+
 			$myFieldLink = $bean->getMeta( 'type' ) . '_id';
 			$alias = $bean->getMeta( 'sys.alias.' . $trash->getMeta( 'type' ) );
 			if ( $alias ) $myFieldLink = $alias . '_id';
-			
+
 			if ( isset( $this->dep[$trash->getMeta( 'type' )] ) && in_array( $bean->getMeta( 'type' ), $this->dep[$trash->getMeta( 'type' )] ) ) {
 				$this->trash( $trash );
 			} else {
@@ -441,7 +445,7 @@ class RedBean_OODB extends RedBean_Observable
 		$beanType = $bean->getMeta( 'type' );
 		foreach ( $ownAdditions as $addition ) {
 			if ( $addition instanceof RedBean_OODBBean ) {
-				
+
 				$myFieldLink = $beanType . '_id';
 				$alias = $bean->getMeta( 'sys.alias.' . $addition->getMeta( 'type' ) );
 				if ( $alias ) $myFieldLink = $alias . '_id';
@@ -608,6 +612,10 @@ class RedBean_OODB extends RedBean_Observable
 			$this->isFrozen  = FALSE;
 		} else {
 			$this->isFrozen = (boolean) $toggle;
+		}
+
+		if ( count( self::$sqlFilters ) ) {
+			RedBean_QueryWriter_AQueryWriter::setSQLFilters( self::$sqlFilters, ( !$this->isFrozen ) );
 		}
 	}
 
@@ -781,10 +789,10 @@ class RedBean_OODB extends RedBean_Observable
 	 * RedBean runs in frozen mode it will throw an exception.
 	 * This function returns the primary key ID of the inserted
 	 * bean.
-	 * 
+	 *
 	 * The return value is an integer if possible. If it is not possible to
 	 * represent the value as an integer a string will be returned. We use
-	 * explicit casts instead of functions to preserve performance 
+	 * explicit casts instead of functions to preserve performance
 	 * (0.13 vs 0.28 for 10000 iterations on Core i3).
 	 *
 	 * @param RedBean_OODBBean|RedBean_SimpleModel $bean bean to store
@@ -1121,5 +1129,37 @@ class RedBean_OODB extends RedBean_Observable
 		$preloader = new RedBean_Preloader( $this );
 
 		return $preloader->load( $beans, $typeList, $closure );
+	}
+
+	/**
+	 * Binds an SQL function to a column.
+	 * This method can be used to setup a decode/encode scheme or
+	 * perform UUID insertion. This method is especially useful for handling
+	 * MySQL spatial columns, because they need to be processed first using
+	 * the asText/GeomFromText functions.
+	 *
+	 * @param string $mode (read or write)
+	 * @param string $field
+	 * @param string $function
+	 */
+	public function bindFunc( $mode, $field, $function )
+	{
+		list( $type, $property ) = explode( '.', $field );
+		$mode = ($mode === 'write') ? RedBean_QueryWriter::C_SQLFILTER_WRITE : RedBean_QueryWriter::C_SQLFILTER_READ;
+
+		if ( !isset( self::$sqlFilters[$mode] ) ) self::$sqlFilters[$mode] = array();
+		if ( !isset( self::$sqlFilters[$mode][$type] ) ) self::$sqlFilters[$mode][$type] = array();
+
+		if ( is_null( $function ) ) {
+			unset( self::$sqlFilters[$mode][$type][$property] );
+		} else {
+			if ($mode === RedBean_QueryWriter::C_SQLFILTER_WRITE) {
+				self::$sqlFilters[$mode][$type][$property] = $function.'(?)';
+			} else {
+				self::$sqlFilters[$mode][$type][$property] = $function."($field)";
+			}
+		}
+
+		RedBean_QueryWriter_AQueryWriter::setSQLFilters( self::$sqlFilters, ( !$this->isFrozen ) );
 	}
 }

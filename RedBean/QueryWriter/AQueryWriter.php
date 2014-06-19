@@ -17,6 +17,7 @@
  * with this source code in the file license.txt.
  */
 abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - otherwise coverage software does not understand.
+
 	/**
 	 * @var RedBean_Adapter_DBAdapter
 	 */
@@ -51,6 +52,16 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 	 * @var array
 	 */
 	public $typeno_sqltype = array();
+
+	/**
+	 * @var array
+	 */
+	private static $sqlFilters = array();
+
+	/**
+	 * @var array
+	 */
+	private static $flagSQLFilterSafeMode = false;
 
 	/**
 	 * Generates a list of parameters (slots) for an SQL snippet.
@@ -262,6 +273,80 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 	}
 
 	/**
+	 * Sets SQL filters.
+	 * This is a lowlevel method to set the SQL filter array.
+	 * The format of this array is:
+	 *
+	 * array(
+	 * 		'<MODE, i.e. 'r' for read, 'w' for write>' => array(
+	 * 			'<TABLE NAME>' => array(
+	 * 				'<COLUMN NAME>' => '<SQL>'
+	 * 			)
+	 * 		)
+	 * )
+	 *
+	 * Example:
+	 *
+	 * array(
+	 * QueryWriter::C_SQLFILTER_READ => array(
+	 * 	'book' => array(
+	 * 		'title' => ' LOWER(book.title) '
+	 * 	)
+	 * )
+	 *
+	 * Note that you can use constants instead of magical chars
+	 * as keys for the uppermost array.
+	 * This is a lowlevel method. For a more friendly method
+	 * please take a look at the facade: R::bindFunc().
+	 *
+	 * @param array
+	 */
+	public static function setSQLFilters( $sqlFilters, $safeMode = false )
+	{
+		self::$flagSQLFilterSafeMode = (boolean) $safeMode;
+		self::$sqlFilters = $sqlFilters;
+	}
+
+	/**
+	 * Returns current SQL Filters.
+	 * This method returns the raw SQL filter array.
+	 * This is a lowlevel method. For a more friendly method
+	 * please take a look at the facade: R::bindFunc().
+	 *
+	 * @return array
+	 */
+	public static function getSQLFilters()
+	{
+		return self::$sqlFilters;
+	}
+
+	/**
+	 * Returns an SQL Filter snippet for reading.
+	 *
+	 * @param string $type type of bean
+	 *
+	 * @return string
+	 */
+	protected function getSQLFilterSnippet( $type )
+	{
+		$existingCols = array();
+		if (self::$flagSQLFilterSafeMode) {
+			$existingCols = $this->getColumns( $type );
+		}
+
+		$sqlFilters = array();
+		if ( isset( self::$sqlFilters[RedBean_QueryWriter::C_SQLFILTER_READ][$type] ) ) {
+			foreach( self::$sqlFilters[RedBean_QueryWriter::C_SQLFILTER_READ][$type] as $property => $sqlFilter ) {
+				if ( !self::$flagSQLFilterSafeMode || isset( $existingCols[$property] ) ) {
+					$sqlFilters[] = $sqlFilter.' AS '.$property.' ';
+				}
+			}
+		}
+		$sqlFilterStr = ( count($sqlFilters) ) ? ( ','.implode( ',', $sqlFilters ) ) : '';
+		return $sqlFilterStr;
+	}
+
+	/**
 	 * Returns the sql that should follow an insert statement.
 	 *
 	 * @param string $table name
@@ -310,12 +395,20 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 		$table   = $this->esc( $type );
 
 		if ( count( $insertvalues ) > 0 && is_array( $insertvalues[0] ) && count( $insertvalues[0] ) > 0 ) {
+
+			$insertSlots = array();
 			foreach ( $insertcolumns as $k => $v ) {
 				$insertcolumns[$k] = $this->esc( $v );
+
+				if (isset(self::$sqlFilters['w'][$type][$v])) {
+					$insertSlots[] = self::$sqlFilters['w'][$type][$v];
+				} else {
+					$insertSlots[] = '?';
+				}
 			}
 
 			$insertSQL = "INSERT INTO $table ( id, " . implode( ',', $insertcolumns ) . " ) VALUES
-			( $default, " . implode( ',', array_fill( 0, count( $insertcolumns ), ' ? ' ) ) . " ) $suffix";
+			( $default, " . implode( ',', $insertSlots ) . " ) $suffix";
 
 			$ids = array();
 			foreach ( $insertvalues as $i => $insertvalue ) {
@@ -491,7 +584,13 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 		$p = $v = array();
 
 		foreach ( $updatevalues as $uv ) {
-			$p[] = " {$this->esc( $uv["property"] )} = ? ";
+
+			if ( isset( self::$sqlFilters['w'][$type][$uv['property']] ) ) {
+				$p[] = " {$this->esc( $uv["property"] )} = ". self::$sqlFilters['w'][$type][$uv['property']];
+			} else {
+				$p[] = " {$this->esc( $uv["property"] )} = ? ";
+			}
+
 			$v[] = $uv['value'];
 		}
 
@@ -522,8 +621,13 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 
 		$table = $this->esc( $type );
 
+		$sqlFilterStr = '';
+		if ( count( self::$sqlFilters ) ) {
+			$sqlFilterStr = $this->getSQLFilterSnippet( $type );
+		}
+
 		$sql   = $this->makeSQLFromConditions( $conditions, $bindings, $addSql );
-		$sql   = "SELECT * FROM {$table} {$sql} -- keep-cache";
+		$sql   = "SELECT * {$sqlFilterStr} FROM {$table} {$sql} -- keep-cache";
 
 		$rows  = $this->adapter->get( $sql, $bindings );
 
@@ -551,11 +655,16 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 
 		$inClause = $this->getParametersForInClause( $linkIDs, $bindings );
 
+		$sqlFilterStr = '';
+		if ( count( self::$sqlFilters ) ) {
+			$sqlFilterStr = $this->getSQLFilterSnippet( $destType );
+		}
+
 		if ( $sourceType === $destType ) {
 			$inClause2 = $this->getParametersForInClause( $linkIDs, $bindings, count( $bindings ) ); //for some databases
 			$sql = "
 			SELECT
-				{$destTable}.*,
+				{$destTable}.* {$sqlFilterStr},
 				COALESCE(
 				NULLIF({$linkTable}.{$sourceCol}, {$destTable}.id),
 				NULLIF({$linkTable}.{$destCol}, {$destTable}.id)) AS linked_by
@@ -570,7 +679,7 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 		} else {
 			$sql = "
 			SELECT
-				{$destTable}.*,
+				{$destTable}.* {$sqlFilterStr},
 				{$linkTable}.{$sourceCol} AS linked_by
 			FROM {$linkTable}
 			INNER JOIN {$destTable} ON
@@ -607,10 +716,15 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 
 		$selector = "{$linkTable}.*";
 
+		$sqlFilterStr = '';
+		if ( count( self::$sqlFilters ) ) {
+			$sqlFilterStr = $this->getSQLFilterSnippet( $destType );
+		}
+
 		if ( $sourceType === $destType ) {
 			$inClause2 = $this->getParametersForInClause( $linkIDs, $bindings, count( $bindings ) ); //for some databases
 			$sql = "
-			SELECT {$selector} FROM {$linkTable}
+			SELECT {$selector} {$sqlFilterStr} FROM {$linkTable}
 			INNER JOIN {$destTable} ON
 			( {$destTable}.id = {$linkTable}.{$destCol} AND {$linkTable}.{$sourceCol} IN ($inClause) ) OR
 			( {$destTable}.id = {$linkTable}.{$sourceCol} AND {$linkTable}.{$destCol} IN ($inClause2) )
@@ -620,7 +734,7 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 			$linkIDs = array_merge( $linkIDs, $linkIDs );
 		} else {
 			$sql = "
-			SELECT {$selector} FROM {$linkTable}
+			SELECT {$selector} {$sqlFilterStr} FROM {$linkTable}
 			INNER JOIN {$destTable} ON
 			( {$destTable}.id = {$linkTable}.{$destCol} AND {$linkTable}.{$sourceCol} IN ($inClause) )
 			{$addSql}
@@ -648,14 +762,18 @@ abstract class RedBean_QueryWriter_AQueryWriter { //bracket must be here - other
 		if ( $this->flagUseCache && $cached = $this->getCached( $linkTable, $key ) ) {
 			return $cached;
 		}
+		$sqlFilterStr = '';
+		if ( count( self::$sqlFilters ) ) {
+			$sqlFilterStr = $this->getSQLFilterSnippet( $destType );
+		}
 
 		if ( $sourceTable === $destTable ) {
-			$sql = "SELECT {$linkTable}.* FROM {$linkTable}
+			$sql = "SELECT {$linkTable}.* {$sqlFilterStr} FROM {$linkTable}
 				WHERE ( {$sourceCol} = ? AND {$destCol} = ? ) OR
 				 ( {$destCol} = ? AND {$sourceCol} = ? ) -- keep-cache";
 			$row = $this->adapter->getRow( $sql, array( $sourceID, $destID, $sourceID, $destID ) );
 		} else {
-			$sql = "SELECT {$linkTable}.* FROM {$linkTable}
+			$sql = "SELECT {$linkTable}.* {$sqlFilterStr} FROM {$linkTable}
 				WHERE {$sourceCol} = ? AND {$destCol} = ? -- keep-cache";
 			$row = $this->adapter->getRow( $sql, array( $sourceID, $destID ) );
 		}

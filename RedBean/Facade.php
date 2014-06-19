@@ -317,7 +317,7 @@ class RedBean_Facade
 		if ( isset( self::$toolboxes[$key] ) ) {
 			throw new RedBean_Exception_Security( 'A database has already be specified for this key.' );
 		}
-		
+
 		self::$toolboxes[$key] = RedBean_Setup::kickstart( $dsn, $user, $pass, $frozen, $autoSetEncoding );
 	}
 
@@ -1740,6 +1740,30 @@ class RedBean_Facade
 			throw new RedBean_Exception( 'Plugin \''.$pluginName.'\' does not exist, add this plugin using: R::ext(\''.$pluginName.'\')' );
 		}
 		return call_user_func_array( self::$plugins[$pluginName], $params );
+	}
+
+	/**
+	 * Binds an SQL function to a column.
+	 * This method can be used to setup a decode/encode scheme or
+	 * perform UUID insertion. This method is especially useful for handling
+	 * MySQL spatial columns, because they need to be processed first using
+	 * the asText/GeomFromText functions.
+	 *
+	 * Example:
+	 *
+	 * R::bindFunc( 'read', 'location.point', 'asText' );
+	 * R::bindFunc( 'write', 'location.point', 'GeomFromText' );
+	 *
+	 * Passing NULL as the function will reset (clear) the function
+	 * for this column/mode.
+	 *
+	 * @param string $mode (read or write)
+	 * @param string $field
+	 * @param string $function
+	 *
+	 */
+	public static function bindFunc( $mode, $field, $function ) {
+		self::$redbean->bindFunc( $mode, $field, $function );
 	}
 }
 

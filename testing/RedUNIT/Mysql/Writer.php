@@ -14,8 +14,65 @@
 class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 {
 	/**
+	 * Test Facade bind function method.
+	 * Test for MySQL WKT spatial format.
+	 */
+	public function testFunctionFilters()
+	{
+		R::nuke();
+		R::bindFunc( 'read', 'location.point', 'asText' );
+		R::bindFunc( 'write', 'location.point', 'GeomFromText' );
+		R::store(R::dispense('location'));
+		//R::debug(1);
+		R::freeze( true );
+		asrt( count( R::find( 'location' ) ), 0 );
+
+		R::freeze( false );
+		try {
+			asrt( count( R::find('location') ), 1);
+			pass();
+		} catch( Exception $exception ) {
+			fail();
+		}
+		$location = R::dispense( 'location' );
+		$location->point = 'POINT(14 6)';
+		R::store($location);
+		$columns = R::$writer->getColumns( 'location' );
+		asrt( $columns['point'], 'point' );
+		$location = $location->fresh();
+		asrt( $location->point, 'POINT(14 6)' );
+		R::nuke();
+		$location = R::dispense( 'location' );
+		$location->point = 'LINESTRING(0 0,1 1,2 2)';
+		R::store($location);
+		$columns = R::$writer->getColumns( 'location' );
+		asrt( $columns['point'], 'linestring' );
+		$location->bustcache = 2;
+		R::store($location);
+		$location = $location->fresh();
+		asrt( $location->point, 'LINESTRING(0 0,1 1,2 2)' );
+		R::nuke();
+		$location = R::dispense( 'location' );
+		$location->point = 'POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7,5 5))';
+		R::store($location);
+		$columns = R::$writer->getColumns( 'location' );
+		asrt( $columns['point'], 'polygon' );
+		$location->bustcache = 4;
+		R::store($location);
+		$location = $location->fresh();
+		asrt( $location->point, 'POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7,5 5))' );
+		R::bindFunc( 'read', 'location.point', NULL );
+		$location->bustcache = 1;
+		R::store($location);
+		$location = $location->fresh();
+		asrt( ( $location->point === 'POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7,5 5))' ), FALSE );
+		$filters = RedBean_QueryWriter_AQueryWriter::getSQLFilters();
+		asrt( is_array( $filters ), TRUE );
+	}
+
+	/**
 	 * Test scanning and coding of values.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testScanningAndCoding()
@@ -89,21 +146,21 @@ class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 		$writer->widenColumn( "testtable", "c1", 2 );
 
 		$writer->addColumn( "testtable", "special", RedBean_QueryWriter_MySQL::C_DATATYPE_SPECIAL_DATE );
-		
+
 		$cols = $writer->getColumns( "testtable" );
 
 		asrt( $writer->code( $cols['special'], TRUE ), RedBean_QueryWriter_MySQL::C_DATATYPE_SPECIAL_DATE );
-		
+
 		asrt( $writer->code( $cols['special'], FALSE ), RedBean_QueryWriter_MySQL::C_DATATYPE_SPECIFIED );
-		
+
 		$writer->addColumn( "testtable", "special2", RedBean_QueryWriter_MySQL::C_DATATYPE_SPECIAL_DATETIME );
-		
+
 		$cols = $writer->getColumns( "testtable" );
 
 		asrt( $writer->code( $cols['special2'], TRUE ), RedBean_QueryWriter_MySQL::C_DATATYPE_SPECIAL_DATETIME );
-		
+
 		asrt( $writer->code( $cols['special'], FALSE ), RedBean_QueryWriter_MySQL::C_DATATYPE_SPECIFIED );
-		
+
 		$cols = $writer->getColumns( "testtable" );
 
 		asrt( $writer->code( $cols["c1"] ), 2 );
@@ -174,7 +231,7 @@ class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 
 	/**
 	 * (FALSE should be stored as 0 not as '')
-	 * 
+	 *
 	 * @return voids
 	 */
 	public function testZeroIssue()
@@ -428,7 +485,7 @@ class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 
 	/**
 	 * Test special data types.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testTypes()
@@ -458,7 +515,7 @@ class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 
 	/**
 	 * Test date types.
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testTypesDates()
@@ -476,7 +533,7 @@ class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 
 	/**
 	 * Date-time
-	 * 
+	 *
 	 * @return void
 	 */
 	public function testTypesDateTimes()
@@ -535,32 +592,32 @@ class RedUNIT_Mysql_Writer extends RedUNIT_Mysql
 
 		asrt( $cols['title'], 'varchar(255)' );
 	}
-	
+
 	/**
-	 * Don't try to add foreign key constraints to 
+	 * Don't try to add foreign key constraints to
 	 * link table if they are already there.
-	 * 
+	 *
 	 * Actually this is pretty much dead code as this would normally never occur,
 	 * but we want 100% test coverage so we test this line anyway.
 	 */
-	public function testCheckConstraintAlreadyExists() 
+	public function testCheckConstraintAlreadyExists()
 	{
 		R::nuke();
-		
+
 		$book = R::dispense( 'book' );
 		$page = R::dispense( 'page' );
-		
+
 		R::associate( $book, $page );
-		
+
 		$didAdd = R::$writer->addConstraintForTypes( 'book', 'page' );
-		
+
 		pass(); //can't really test this - just don't crash!
 	}
 
 	/**
 	 * Stored and reloads spatial data to see if the
 	 * value is preserved correctly.
-	 * 
+	 *
 	 * @return void
 	 */
 	protected function setGetSpatial( $data )
